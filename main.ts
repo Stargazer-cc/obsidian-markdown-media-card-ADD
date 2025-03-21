@@ -48,6 +48,30 @@ async function calcImageUrl(path: string, sourcePath: string) {
 	}
 }
 
+// 新增函数：处理 Obsidian 内部链接
+async function processObsidianUrl(url: string, sourcePath: string) {
+	// 检查是否是 Obsidian 内部链接（以 "obsidian://" 开头或者是相对路径）
+	if (url.startsWith("obsidian://") || (!url.startsWith("http://") && !url.startsWith("https://") && url.trim() !== "")) {
+		try {
+			const div = createDiv();
+			await MarkdownRenderer.render(
+				this.app,
+				`[link](${url})`,
+				div,
+				sourcePath,
+				new MarkdownRenderChild(div)
+			);
+			const link = div.find("a");
+			if (link) {
+				return link.getAttribute("href");
+			}
+		} catch (e) {
+			console.error("处理 Obsidian 链接时出错:", e);
+		}
+	}
+	return url;
+}
+
 export default class MediaCardPlugin extends Plugin {
 	async onload() {
 		this.registerMarkdownCodeBlockProcessor(
@@ -56,9 +80,17 @@ export default class MediaCardPlugin extends Plugin {
 				el.addClass("markdown-media-card-render");
 				try {
 					const data = parseYaml(source);
+					
+					// 处理封面图片
 					if (data.cover) {
-						data.cover = await calcImageUrl(data.cover, ctx.sourcePath);
+						data.cover = await calcImageUrl.call(this, data.cover, ctx.sourcePath);
 					}
+					
+					// 处理链接 URL
+					if (data.url) {
+						data.url = await processObsidianUrl.call(this, data.url, ctx.sourcePath);
+					}
+					
 					const html = template(data);
 					const fragment = sanitizeHTMLToDom(html);
 					el.appendChild(fragment);
